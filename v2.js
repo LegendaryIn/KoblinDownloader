@@ -3,27 +3,28 @@ const cheerio = require('cheerio');
 const iconv = require('iconv-lite');
 const fs = require('fs');
 
-let options = {
-    url: 'https://www.wenku8.net/modules/article/reader.php?aid=2084&cid=74366',
-    encoding: null,
-};
+let novalRootUrl = process.argv[2];
 
-request(options, function(error, response, body){
-    let html = iconv.decode(body, 'gbk');
-    processHtml(html);
-});
+start(novalRootUrl);
 
-function processHtml(responseBody){
-    let $ = cheerio.load(responseBody, {decodeEntities: false});
-    let translated = Traditionalized($('#content').text());
-    saveFile(translated);
+function start(novalRootUrl){
+    let requestOpts = {
+        url: novalRootUrl,
+        encoding: null,
+    };
+
+    request(requestOpts, function(error, response, body){
+        let html = iconv.decode(body, 'gbk');
+        getChapterUrls(html);
+    });
 }
 
-function saveFile(data){
-    fs.writeFile('test.txt', data, (err) => {
-        if(err) console.log(err);
-        console.log('Save Successed!');
+function getChapterUrls(rootHtml){
+    let $ = cheerio.load(rootHtml, {decodeEntities: false});
+    $('table').children().each(function(){
+        console.log($(this).html() + '\n');
     });
+    
 }
 
 //below are copy from original site
