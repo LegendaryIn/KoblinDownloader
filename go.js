@@ -2,6 +2,7 @@ const request = require('request');
 const cheerio = require('cheerio');
 const iconv = require('iconv-lite');
 const fs = require('fs');
+const os = require('os');
 
 let novalRootUrl = process.argv[2];
 
@@ -15,16 +16,82 @@ function start(novalRootUrl){
 
     request(requestOpts, function(error, response, body){
         let html = iconv.decode(body, 'gbk');
-        getChapterUrls(html);
+		let structure = getBookStructure(html);
+		saveFile(structure);
     });
 }
 
-function getChapterUrls(rootHtml){
-    let $ = cheerio.load(rootHtml, {decodeEntities: false});
-    $('table').children().each(function(){
-        console.log($(this).html() + '\n');
+function getBookStructure(rootHtml){
+	let $ = cheerio.load(rootHtml, {decodeEntities: false});
+	
+	let structure = {};
+	let currentVolume;
+
+	structure.bookName = Traditionalized($('#title').text());
+	structure.volumes = [];
+
+    $('td').each(function(){
+        if($(this).attr('class') == 'vcss'){
+			currentVolume = {};
+			currentVolume.name = Traditionalized($(this).text());
+			currentVolume.chapters = [];
+			structure.volumes.push(currentVolume);
+		}
+
+		if($(this).attr('class') == 'ccss'){
+			let currentChapter = {};
+			let anchor = $(this).children('a');
+
+			if(anchor.length === 0) return;
+
+			currentChapter.url = anchor.attr('href');
+			currentChapter.name = Traditionalized(anchor.text());
+			currentVolume.chapters.push(currentChapter);
+		}
     });
-    
+	
+	console.log('Parsing root...');
+	return structure;
+}
+
+function saveFile(structure){
+	console.log('Downloading...');
+	let desktopPath = os.homedir() + '/desktop';
+	let bookDir = `${desktopPath}/${structure.bookName}`
+	fs.mkdirSync(bookDir);
+
+	for(let currentVolume of structure.volumes){
+		saveVolume(bookDir, currentVolume);
+	}
+}
+
+function saveVolume(bookDir, volume){
+	let volumeDir = `${bookDir}/${volume.name}`;
+	fs.mkdirSync(volumeDir);
+	console.log(`Save ${volume.name}...`);
+
+	for(let currentChapter of volume.chapters){
+		saveChapter(volumeDir, currentChapter);
+	}
+}
+
+function saveChapter(volumeDir, chapter){
+	let filePath = `${volumeDir}/${chapter.name}.txt`;
+
+	let requestOpts = {
+        url: chapter.url,
+        encoding: null,
+	};
+	
+	request(requestOpts, function(error, response, body){
+        let html = iconv.decode(body, 'gbk');
+		let $ = cheerio.load(html, {decodeEntities: false});
+
+		let content = Traditionalized($('#content').text());
+
+		fs.writeFileSync(filePath, content);
+		console.log(`Save ${chapter.name}.txt ...`);
+    });
 }
 
 //below are copy from original site
